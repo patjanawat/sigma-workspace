@@ -1,0 +1,6 @@
+[submodule "agents"]
+	path = agents
+	url = https://github.com/patjanawat/sigma-agents.git
+[submodule "project-ops"]
+	path = project-ops
+	url = https://pa_manao_meal@bitbucket.org/manaosoftware/project-ops.git
