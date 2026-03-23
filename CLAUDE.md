@@ -73,12 +73,24 @@ git push
 - **Never commit or push without explicit user confirmation**
 - All code changes target `project-ops/` — never modify agent files here (edit in `sigma-agents` repo instead)
 - `project-ops/` is on Bitbucket — use `git -C project-ops` for git operations inside it
-- `.claude/settings.local.json` is gitignored — each developer maintains their own
+- `.claude/settings.local.json` is gitignored — copy from `settings.local.json.example` to get started:
+  ```bash
+  cp settings.local.json.example .claude/settings.local.json
+  ```
 
 ### Workflow for Every Task
 
 1. **Summarize the plan** — describe what will change, which files, any risks — wait for confirmation before writing any code
 2. **Create branch** — `git -C project-ops checkout -b <type>/<ticket-or-description>`
+
+   Branch naming convention:
+   ```
+   feature/SIGMA-123-short-description    # new feature
+   bugfix/SIGMA-456-short-description     # bug fix
+   hotfix/SIGMA-789-short-description     # urgent production fix
+   chore/short-description                # maintenance, deps, config
+   refactor/short-description             # code refactor
+   ```
 3. **Implement** — make changes
 4. **Summarize what was done** — list files changed and a brief description of each change — wait for confirmation
 5. **Commit & push** — only after explicit user confirmation
