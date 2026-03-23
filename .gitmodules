@@ -1,6 +1,6 @@
 [submodule "project-ops"]
 	path = project-ops
-	url = https://pa_manao_meal@bitbucket.org/manaosoftware/project-ops.git
+	url = https://bitbucket.org/manaosoftware/project-ops.git
 [submodule ".claude/agents"]
 	path = .claude/agents
 	url = https://github.com/patjanawat/sigma-agents.git
