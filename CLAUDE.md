@@ -7,7 +7,7 @@ This is the **Sigma Workspace** — a meta-repository that bundles the Sigma pla
 | Submodule | Path | Purpose |
 |---|---|---|
 | sigma-agents | `.claude/agents/` | Agent definitions (source of truth) |
-| project-ops | `project-ops/` | Sigma platform codebase |
+| project-ops | `project-ops/` | Sigma platform codebase (submodule, working path: `d:\2026\sigma\sigma-workspace\project-ops\`) |
 
 ---
 
@@ -72,7 +72,8 @@ git push
 - **Always create a new branch before making any code changes** — never work directly on `main` or `master`
 - **Never commit or push without explicit user confirmation**
 - All code changes target `project-ops/` — never modify agent files here (edit in `sigma-agents` repo instead)
-- `project-ops/` is on Bitbucket — use `git -C project-ops` for git operations inside it
+- `project-ops/` is a git submodule on Bitbucket — always use `git -C project-ops` for git operations inside it
+- The working path for project-ops is `d:\2026\sigma\sigma-workspace\project-ops\` — never edit files at `d:\2026\sigma\project-ops\` (standalone checkout, not used)
 - `.claude/settings.local.json` is gitignored — copy from `settings.local.json.example` to get started:
   ```bash
   cp settings.local.json.example .claude/settings.local.json
