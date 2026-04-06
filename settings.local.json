@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(d:\\2026\\sigma\\sigma-workspace\\**)",
+      "Bash(git -C d:\\2026\\sigma\\sigma-workspace\\project-ops:*)",
+      "Bash(bun dev:*)",
+      "Bash(bun run:*)",
+      "Bash(bun install:*)",
+      "Bash(bun test:*)",
+      "Bash(bunx prisma:*)"
+    ]
+  }
+}

@@ -1,0 +1,340 @@
+# Sigma — Bitbucket Deployment Flow
+
+> อัปเดต: 2026-04-03
+
+---
+
+## ภาพรวม
+
+Bitbucket ทำหน้าที่เป็น **Version Control System (VCS)** หลักของ Sigma  
+ทุก Service จะมี Repository ใน Bitbucket พร้อม Branch ของตัวเอง และ SIGMA จัดการทุกอย่างผ่าน Terraform
+
+---
+
+## Integration Dependencies
+
+```
+bitbucket-project (ต้องมีก่อน)
+  ├─ bitbucket-repository      ← สร้าง repo
+  └─ bitbucket-webhook         ← hook PR events
+
+bitbucket (ต้องการ bitbucket-project)
+  ├─ init-service-bitbucket    ← copy template code เข้า repo
+  └─ init-service-charts       ← copy Helm charts เข้า repo
+
+robot-framework / playwright (test)
+  ├─ bitbucket-project
+  └─ init-test-framework       ← copy test framework เข้า repo
+```
+
+---
+
+## Full Deployment Flow
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  👤 User                  🔐 Admin           ⚙️ SIGMA (Terraform)    │
+│  ────────────             ─────────          ──────────────────────  │
+│                                                                      │
+│  1. สร้าง Service         │                 │                        │
+│     └─ เลือก integration  │                 │                        │
+│        "bitbucket-project"│                 │                        │
+│             │             │                 │                        │
+│  2. ส่ง Resource ─────────► 3. Admin Approve│                        │
+│     Request               │        │        │                        │
+│                           │        └────────►  4. Deploy Phase 1     │
+│                           │                 │   bitbucket-repository │
+│                           │                 │   └─ POST Bitbucket API│
+│                           │                 │   └─ สร้าง repo ✅     │
+│                           │                 │                        │
+│                           │                 │   bitbucket-webhook    │
+│                           │                 │   └─ สร้าง webhook ✅  │
+│                           │                 │                        │
+│                           │                 │  5. Deploy Phase 2     │
+│                           │                 │   bitbucket-repo-branch│
+│                           │                 │   └─ สร้าง branch ✅   │
+│                           │                 │                        │
+│                           │                 │   init-service-bitbucket│
+│                           │                 │   └─ copy template code│
+│                           │                 │   └─ push to branch ✅ │
+│                           │                 │                        │
+│                           │                 │   init-service-charts  │
+│                           │                 │   └─ copy Helm charts  │
+│                           │                 │   └─ push to charts    │
+│                           │                 │      branch ✅         │
+│                           │                 │                        │
+│  6. ดู Repo พร้อมใช้ ◄──────────────────────┘                        │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Templates ทั้ง 7 ตัว
+
+| Template | หน้าที่ | Dependency |
+|---|---|---|
+| `bitbucket-repository` | สร้าง repo | Bitbucket Provider |
+| `bitbucket-webhook` | hook PR events | bitbucket-repository |
+| `bitbucket-repository-branch` | สร้าง branch | bitbucket-repository |
+| `init-service-bitbucket` | copy service template code | repo + branch |
+| `init-service-charts` | copy Helm charts | repo + branch |
+| `init-test-framework` | copy test framework | repo + branch |
+| `argocd-repository-bitbucket` | register repo ใน ArgoCD | repo + ArgoCD provider |
+
+---
+
+## ตัวอย่างจริง: Deploy Service "my-api" ลง Bitbucket
+
+### Provider ที่ต้องมีก่อน
+
+```
+Bitbucket Provider config:
+  email:      "devops@company.com"
+  username:   "devops-bot"
+  api_token:  [🔐 encrypted]
+  workspace:  "my-company"
+  project_key: "SIGMA"
+```
+
+---
+
+### Phase 1: สร้าง Repository
+
+**Template:** `bitbucket-repository`
+
+```
+Inputs:
+  provider_bitbucket:  → [Bitbucket Provider]
+  repo_name:           "my-api"
+  is_private:          true
+  description:         "Generate by SIGMA"
+
+  [auto จาก provider config]
+  workspace:           "my-company"
+  project_key:         "SIGMA"
+
+Terraform ทำ:
+  POST https://api.bitbucket.org/2.0/repositories/my-company/my-api
+  Authorization: Basic {base64(email:api_token)}
+  Body: { scm: "git", is_private: true, project: { key: "SIGMA" } }
+
+Outputs:
+  ✓ repository_url:  "https://bitbucket.org/my-company/my-api"
+  ✓ endpoint:        "https://bitbucket.org/my-company/my-api"
+  ✓ repository_name: "my-api"
+```
+
+---
+
+### Phase 1: สร้าง Webhook
+
+**Template:** `bitbucket-webhook`
+
+```
+Inputs:
+  resource_bitbucket_repo:   → [my-api repo จาก Phase 1]
+  webhook_title:             "Webhook generated by SIGMA"
+  webhook_target_url:        "https://ca-ai-code-assistant-prod.../hook?commands=summary,review"
+
+Terraform ทำ:
+  POST https://api.bitbucket.org/2.0/repositories/my-company/my-api/hooks
+  Events: ["pullrequest:created"]
+
+ผลลัพธ์:
+  ✓ ทุก PR ที่สร้างใหม่ จะ trigger webhook → AI code review อัตโนมัติ
+```
+
+---
+
+### Phase 2: สร้าง Branch
+
+**Template:** `bitbucket-repository-branch`
+
+```
+Inputs:
+  resource_bitbucket_repo:  → [my-api repo]
+  branch_name:              "main"
+  source_commit:            "abc123def456..."   ← commit hash ต้นทาง
+
+Terraform ทำ:
+  1. ถ้าไม่มี branch ใดเลย → initialize repo ด้วย README
+  2. git clone https://my-company:api_token@bitbucket.org/my-company/my-api.git
+  3. git checkout -b main abc123def456
+  4. git push origin main
+
+Outputs:
+  ✓ branch "main" พร้อมใช้งาน
+```
+
+---
+
+### Phase 2: Copy Service Template Code
+
+**Template:** `init-service-bitbucket`
+
+```
+Inputs:
+  resource_bitbucket_repo:         → [my-api repo]
+  resource_bitbucket_repo_branch:  → [main branch]
+  service_name:                    "my-api"
+  template_repo:                   "sigma-templates"
+  template_branch:                 "main"
+  template_subfolder:              "nodejs-express"
+  target_repo:                     "my-api"
+  placeholders: {
+    SERVICE_FOLDER:                        "my-api"
+    SERVICE_CONNECTION_BITBUCKET:          "bitbucket-my-company"
+    SERVICE_CONNECTION_SONARQUBE:          "sonarqube-connection"
+    SERVICE_CONNECTION_CONTAINER_REGISTRY: "acr-connection"
+    CHART_BRANCH:                          "master"
+    SERVICE_BRANCH:                        "main"
+  }
+
+Terraform ทำ:
+  1. git clone sigma-templates/nodejs-express
+  2. git clone my-api (target)
+  3. copy nodejs-express/* → my-api/my-api/
+  4. แทนที่ placeholders ใน:
+     - azure-pipeline/cicd.yaml
+     - azure-pipeline/sonarqube.yaml
+  5. git commit "Initialize service my-api from template: nodejs-express"
+  6. git push origin main
+
+ผลลัพธ์:
+  ✓ my-api/ มี source code template พร้อม CI/CD pipeline config
+```
+
+---
+
+### Phase 2: Copy Helm Charts
+
+**Template:** `init-service-charts`
+
+```
+Inputs:
+  resource_bitbucket_repo_branch:  → [main branch]
+  project_name:                    "my-project"
+  service_name:                    "my-api"
+  chart_branch_name:               "master"
+  service_branch_name:             "main"
+  template_repo:                   "sigma-helm-charts"
+  template_subfolder:              "nodejs-chart"
+  target_repo:                     "sigma-charts"
+  placeholders: {
+    SERVICE_NAME: "my-api"
+    IMAGE_REPO:   "mycompany.azurecr.io/my-api"
+  }
+
+Terraform ทำ:
+  1. clone sigma-helm-charts/nodejs-chart
+  2. clone sigma-charts (Helm repo กลาง)
+  3. สร้าง directory: my-project/main/my-api/
+  4. copy chart templates → my-project/main/my-api/
+  5. envsubst placeholders ใน values.yaml
+  6. git commit "Initialize service my-project/main/my-api from template: nodejs-chart"
+  7. git push
+
+ผลลัพธ์:
+  ✓ Helm chart พร้อม deploy ใน sigma-charts/my-project/main/my-api/
+```
+
+---
+
+## Member Sync อัตโนมัติ
+
+เมื่อ deploy `bitbucket-repository` สำเร็จ SIGMA จะ **sync สมาชิกของ Project เข้า Bitbucket อัตโนมัติ**
+
+```
+SIGMA Role          →   Bitbucket Role
+─────────────────       ──────────────
+ProjectViewer       →   read
+ProjectContributor  →   write
+ProjectOwner        →   admin
+```
+
+```
+syncBitbucketMembers("project-uuid")
+  │
+  ├─ ดึง ACL ทั้งหมดของ project
+  ├─ หา bitbucket-repository resource
+  ├─ สร้าง BitbucketMemberManager
+  │    workspace: "my-company"
+  │    repo:      "my-api"
+  │
+  └─ syncMembers():
+       ├─ chunk emails เป็นกลุ่มละ 90 คน (Bitbucket limit)
+       ├─ query account_id จาก email
+       ├─ เพิ่มสมาชิกใหม่ด้วย role ที่กำหนด
+       └─ PUT /permissions-config/users/{account_id}
+            { permission: "write" }
+```
+
+---
+
+## API Endpoint: ดึง Branches
+
+```
+GET /api/projects/[projectUUID]/bitbucket/branches
+
+Flow:
+  1. ดึง bitbucket-repository resource ของ project
+  2. ถอดรหัส api_token (SecurityManager.decryptData)
+  3. GET https://api.bitbucket.org/2.0/repositories/{workspace}/{repo}/refs/branches
+  4. handle pagination อัตโนมัติ
+  5. return branch names เรียงตัวอักษร
+
+Response:
+  ["develop", "feature/my-feature", "main", "master"]
+```
+
+---
+
+## Authentication Methods
+
+```
+1. Basic Auth (API calls)
+   Authorization: Basic {base64("devops@company.com:api_token")}
+
+2. Git HTTPS (clone/push)
+   https://devops@company.com:api_token@bitbucket.org/workspace/repo.git
+
+3. Git Token Auth (test framework)
+   https://x-bitbucket-api-token-auth:api_token@bitbucket.org/workspace/repo.git
+```
+
+---
+
+## Deployment Timeline (ตัวอย่าง)
+
+```
+00:00  ResourceRequest สร้าง           status: waiting ⏳
+00:01  Admin approve
+00:02  bitbucket-repository deploy     status: running
+00:04  Repo "my-api" สร้างสำเร็จ       status: completed ✅
+00:04  bitbucket-webhook deploy        status: running
+00:05  Webhook สร้างสำเร็จ             status: completed ✅
+00:05  Member sync อัตโนมัติ           ← 3 คนถูกเพิ่มเข้า repo
+00:06  bitbucket-repository-branch     status: running
+00:08  Branch "main" สร้างสำเร็จ       status: completed ✅
+00:08  init-service-bitbucket          status: running
+00:12  Code template push สำเร็จ       status: completed ✅
+00:12  init-service-charts             status: running
+00:15  Helm charts push สำเร็จ         status: completed ✅
+       → Service พร้อม develop และ deploy 🎉
+```
+
+---
+
+## Integration กับ Azure DevOps & ArgoCD
+
+```
+bitbucket-repository ✅
+  │
+  ├─► azure-devops-service-connection-bitbucket
+  │     └─ Azure DevOps สามารถ pull code จาก Bitbucket ได้
+  │         └─ ใช้ใน CI/CD pipelines (build, test, scan)
+  │
+  └─► argocd-repository-bitbucket
+        └─ ArgoCD ติดตาม Helm charts repo
+            └─ auto-sync deployment เมื่อ charts เปลี่ยน
+```
