@@ -56,6 +56,7 @@ Agents live in `.claude/agents/` (part of this workspace — edit directly here)
 | `ui-component` | Creating or modifying UI components |
 | `code-reviewer` | Reviewing code before merging |
 | `orchestrator` | Complex multi-step tasks spanning API + UI + DB |
+| `expert-viewer` | Deep codebase analysis, root cause investigation, architecture questions — read-only |
 
 ---
 
