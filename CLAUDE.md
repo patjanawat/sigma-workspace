@@ -7,7 +7,7 @@ This is the **Sigma Workspace** — a meta-repository that bundles the Sigma pla
 | Path | Purpose |
 |---|---|
 | `.claude/agents/` | Agent definitions (part of this workspace) |
-| `project-ops/` | Sigma platform codebase (submodule, working path: `d:\2026\sigma\sigma-workspace\project-ops\`) |
+| `project-ops/` | Sigma platform codebase (submodule reference only — **edit at standalone path** `d:\2026\sigma\project-ops\`) |
 
 ---
 
@@ -25,23 +25,23 @@ This is the **Sigma Workspace** — a meta-repository that bundles the Sigma pla
 
 ## Working in This Workspace
 
-All code changes happen inside `project-ops/`:
+All code changes happen inside the **standalone** checkout at `d:\2026\sigma\project-ops\`:
 
 ```bash
 # Install dependencies
-cd project-ops && bun install
+cd /d/2026/sigma/project-ops && bun install
 
 # Start dev server
-cd project-ops && bun dev
+cd /d/2026/sigma/project-ops && bun dev
 
 # Run migrations
-cd project-ops && bun run migrate:dev
+cd /d/2026/sigma/project-ops && bun run migrate:dev
 
 # Run tests
-cd project-ops && bun test
+cd /d/2026/sigma/project-ops && bun test
 ```
 
-**Always `cd project-ops` before running any project commands.**
+**Always run project commands from `d:\2026\sigma\project-ops\` (standalone), not from the submodule path inside the workspace.**
 
 ---
 
@@ -65,9 +65,9 @@ Agents live in `.claude/agents/` (part of this workspace — edit directly here)
 - **Before starting any task — summarize what will be done, which files will be affected, and wait for confirmation before proceeding**
 - **Always create a new branch before making any code changes** — always branch from `develop`, never work directly on `main`, `master`, or `develop`
 - **Never commit or push without explicit user confirmation**
-- All code changes target `project-ops/` — agent files in `.claude/agents/` are part of this workspace and can be edited directly
-- `project-ops/` is a git submodule on Bitbucket — always use `git -C project-ops` for git operations inside it
-- The working path for project-ops is `d:\2026\sigma\sigma-workspace\project-ops\` — never edit files at `d:\2026\sigma\project-ops\` (standalone checkout, not used)
+- All code changes target the **standalone** project-ops checkout at `d:\2026\sigma\project-ops\` — **never edit the submodule inside the workspace** at `d:\2026\sigma\sigma-workspace\project-ops\`
+- Agent files in `.claude/agents/` are part of this workspace and can be edited directly here
+- `project-ops/` is a git submodule on Bitbucket — for git operations on the standalone checkout, use `git -C d:\2026\sigma\project-ops` (or `cd` into it)
 - `.claude/settings.local.json` is gitignored — copy from `settings.local.json.example` to get started:
   ```bash
   cp settings.local.json.example .claude/settings.local.json
@@ -75,11 +75,14 @@ Agents live in `.claude/agents/` (part of this workspace — edit directly here)
 
 ### Workflow for Every Task
 
-1. **Summarize the plan** — describe what will change, which files, any risks — wait for confirmation before writing any code
-2. **Create branch** — always from `develop`:
+Each ticket has a scratchpad folder at `d:\2026\sigma\sigma-workspace\tasks\<TICKET>\` containing `plan.md` (plan & evolving summary) and `progress.md` (phased checklist + log). Create/update these as the task progresses. They live in the **workspace** (not `project-ops/`) since they are task metadata, not code.
+
+1. **Summarize the plan** — describe what will change, which files, any risks — save to `tasks/<TICKET>/plan.md` and seed `tasks/<TICKET>/progress.md` — wait for confirmation before writing any code
+2. **Create branch** — always from `develop` (run in the standalone checkout):
    ```bash
-   git -C project-ops checkout develop && git -C project-ops pull
-   git -C project-ops checkout -b <type>/<ticket-or-description>
+   cd /d/2026/sigma/project-ops
+   git checkout develop && git pull
+   git checkout -b <type>/<ticket-or-description>
    ```
 
    Branch naming convention:
@@ -90,9 +93,13 @@ Agents live in `.claude/agents/` (part of this workspace — edit directly here)
    chore/short-description                # maintenance, deps, config
    refactor/short-description             # code refactor
    ```
-3. **Implement** — make changes
+3. **Implement** — make changes — update `progress.md` Log with each meaningful state change (files edited, verify results, IDE diagnostics)
 4. **Summarize what was done** — list files changed and a brief description of each change — wait for confirmation
-5. **Commit & push** — only after explicit user confirmation
+5. **Commit & push** — only after explicit user confirmation — append commit hash, push status, and PR URL (or hand-off note) to `progress.md` Log
+
+> Bitbucket push & PR creation require interactive auth and have no `gh` equivalent in this environment. The agent must hand off the push command and a pre-drafted PR title/body to the user — never attempt and fail silently.
+
+> No `typecheck` script exists in `project-ops/package.json`. Use `bunx tsc --noEmit` for type-checking.
 
 ---
 
